@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexusGate — LLM Gateway</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.0/dist/cdn.min.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080c10;
+    --bg2:      #0d1520;
+    --bg3:      #111d2c;
+    --border:   #1a2d42;
+    --accent:   #00d4aa;
+    --accent2:  #0066ff;
+    --warn:     #ffaa00;
+    --error:    #ff4466;
+    --text:     #c8d8e8;
+    --muted:    #4a6080;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scan-line texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,212,170,0.015) 2px,
+      rgba(0,212,170,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Layout ── */
+  .shell { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; left: 0; height: 100vh;
+    z-index: 100;
+  }
+
+  .main {
+    margin-left: 220px;
+    flex: 1;
+    padding: 24px;
+    max-width: 1400px;
+  }
+
+  /* ── Sidebar ── */
+  .logo {
+    padding: 20px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.05em;
+  }
+  .logo span { color: var(--accent); }
+  .logo-sub {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .nav { padding: 12px 0; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(0,212,170,0.05); }
+  .nav-item.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: rgba(0,212,170,0.08);
+  }
+  .nav-icon { width: 16px; text-align: center; font-size: 14px; }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .status-dot {
+    display: inline-block; width: 6px; height: 6px;
+    border-radius: 50%; margin-right: 6px;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Header ── */
+  .page-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  .page-title {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.03em;
+  }
+  .page-title span { color: var(--accent); }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.3;
+  }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .card-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+  .card-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .card-accent { color: var(--accent); }
+  .card-warn { color: var(--warn); }
+  .card-error { color: var(--error); }
+
+  /* ── Grid ── */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .grid-2-3 { display: grid; grid-template-columns: 2fr 3fr; gap: 12px; margin-bottom: 20px; }
+
+  @media (max-width: 1200px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-2-3 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 800px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+  }
+
+  /* ── Provider status chips ── */
+  .providers-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .provider-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .provider-chip .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .dot-ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .dot-warn { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .dot-error { background: var(--error); }
+  .dot-off { background: var(--muted); }
+  .provider-stat { font-size: 11px; color: var(--muted); }
+
+  /* ── Chart container ── */
+  .chart-wrap { height: 200px; position: relative; }
+  .chart-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(26,45,66,0.5);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+  tr:hover td { background: rgba(0,212,170,0.03); }
+  .td-muted { color: var(--muted); }
+  .td-accent { color: var(--accent); }
+  .td-warn { color: var(--warn); }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 8px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text);
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+  }
+  .btn-primary:hover { background: transparent; color: var(--accent); }
+  .btn-danger { border-color: var(--error); color: var(--error); }
+  .btn-danger:hover { background: var(--error); color: white; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* ── Input ── */
+  input, select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+
+  /* ── Modal ── */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(8,12,16,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    width: 480px;
+    max-width: 90vw;
+    padding: 28px;
+  }
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .form-row { margin-bottom: 14px; }
+  .form-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .form-row input, .form-row select { width: 100%; }
+
+  /* ── Key reveal ── */
+  .key-reveal {
+    background: var(--bg3);
+    border: 1px solid var(--accent);
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    word-break: break-all;
+    margin: 16px 0;
+  }
+  .key-warn {
+    font-size: 11px;
+    color: var(--warn);
+    margin-top: 8px;
+  }
+
+  /* ── Login screen ── */
+  .login-screen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  .login-box {
+    width: 380px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 40px;
+  }
+  .login-logo {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .login-logo span { color: var(--accent); }
+
+  /* ── Misc ── */
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .flex-gap { display: flex; gap: 8px; align-items: center; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .badge-ok { background: rgba(0,212,170,0.12); color: var(--accent); border: 1px solid rgba(0,212,170,0.3); }
+  .badge-off { background: rgba(74,96,128,0.2); color: var(--muted); border: 1px solid var(--border); }
+  .badge-warn { background: rgba(255,170,0,0.12); color: var(--warn); border: 1px solid rgba(255,170,0,0.3); }
+  .text-mono { font-family: var(--mono); }
+  .mb-0 { margin-bottom: 0; }
+  .section-gap { margin-bottom: 20px; }
+  .uptime { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .refresh-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body x-data="app()" x-init="init()">
+
+<!-- ── Login Screen ───────────────────────────────────────────────────── -->
+<div class="login-screen" x-show="!token" x-cloak>
+  <div class="login-box">
+    <div class="login-logo"><span>Nexus</span>Gate</div>
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:28px;font-family:var(--mono);letter-spacing:0.1em">LLM GATEWAY CONSOLE</div>
+
+    <div class="form-row">
+      <label class="form-label">Admin JWT Token</label>
+      <input type="password" placeholder="Bearer token from startup logs..." x-model="loginToken" @keyup.enter="doLogin()">
+    </div>
+    <div style="color:var(--error);font-size:11px;margin-bottom:12px;font-family:var(--mono)" x-show="loginError" x-text="loginError"></div>
+    <button class="btn btn-primary" style="width:100%" @click="doLogin()">CONNECT</button>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted);font-family:var(--mono);text-align:center">
+      Get token: check container startup logs<br>or POST /admin/token with your secret
+    </div>
+  </div>
+</div>
+
+<!-- ── Shell ─────────────────────────────────────────────────────────── -->
+<div class="shell" x-show="token" x-cloak>
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="logo">
+      <div><span>Nexus</span>Gate</div>
+      <div class="logo-sub">LLM Gateway</div>
+    </div>
+    <div class="nav">
+      <div class="nav-item" :class="page==='overview' && 'active'" @click="page='overview'">
+        <span class="nav-icon">◈</span> Overview
+      </div>
+      <div class="nav-item" :class="page==='costs' && 'active'" @click="page='costs'; loadCosts()">
+        <span class="nav-icon">$</span> Costs
+      </div>
+      <div class="nav-item" :class="page==='keys' && 'active'" @click="page='keys'; loadKeys()">
+        <span class="nav-icon">⌗</span> API Keys
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div><span class="status-dot"></span>ONLINE</div>
+      <div class="uptime" style="margin-top:4px" x-text="'UP ' + formatUptime(health.uptime_secs)"></div>
+      <div style="margin-top:8px;cursor:pointer;color:var(--muted)" @click="token=''; page='overview'">LOGOUT</div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ── Overview ─────────────────────────────────────────────────── -->
+    <div x-show="page==='overview'">
+      <div class="page-header">
+        <div class="page-title"><span>//</span> Overview</div>
+        <div class="flex-gap">
+          <span class="refresh-hint" x-text="'Refreshed ' + lastRefresh"></span>
+          <button class="btn btn-sm" @click="loadHealth()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Provider chips -->
+      <div class="providers-row">
+        <template x-for="p in health.providers" :key="p.provider">
+          <div class="provider-chip">
+            <div class="dot"
+              :class="!p.configured ? 'dot-off' : p.rate_limited ? 'dot-warn' : 'dot-ok'">
+            </div>
+            <div>
+              <div x-text="p.provider.toUpperCase()" style="font-size:12px"></div>
+              <div class="provider-stat"
+                x-text="!p.configured ? 'not configured' : p.rate_limited ? 'rate limited ' + (p.rate_limit_reset_secs ? p.rate_limit_reset_secs+'s' : '') : p.requests_today + ' req today'">
+              </div>
+            </div>
+          </div>
+        </template>
+        <div class="provider-chip" style="background:transparent;border-style:dashed">
+          <div class="dot dot-off"></div>
+          <div style="font-size:11px;color:var(--muted)">v<span x-text="health.version || '?'"></span></div>
+        </div>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="grid-4">
+        <div class="card">
+          <div class="card-label">Today's Cost</div>
+          <div class="card-value card-accent" x-text="'$' + todayCost.toFixed(4)"></div>
+          <div class="card-sub" x-text="todayRequests + ' requests'"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">This Month</div>
+          <div class="card-value" x-text="'$' + monthCost.toFixed(4)"></div>
+          <div class="card-sub" x-text="monthRequests + ' requests'"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Active Providers</div>
+          <div class="card-value" x-text="(health.providers||[]).filter(p=>p.available).length"></div>
+          <div class="card-sub">of <span x-text="(health.providers||[]).filter(p=>p.configured).length"></span> configured</div>
+        </div>
+        <div class="card">
+          <div class="card-label">API Keys</div>
+          <div class="card-value" x-text="keyCount"></div>
+          <div class="card-sub">active keys</div>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="chart-title">Cost / Day (Last 14 days)</div>
+          <div class="chart-wrap"><canvas id="costChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="chart-title">Requests by Provider</div>
+          <div class="chart-wrap"><canvas id="providerChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Provider detail table -->
+      <div class="card mb-0">
+        <div class="chart-title" style="margin-bottom:16px">Provider Details</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Provider</th><th>Status</th><th>Requests Today</th>
+              <th>Cost Today</th><th>Rate Limit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in health.providers" :key="p.provider">
+              <tr>
+                <td class="td-accent text-mono" x-text="p.provider"></td>
+                <td>
+                  <span class="badge"
+                    :class="!p.configured ? 'badge-off' : p.rate_limited ? 'badge-warn' : 'badge-ok'"
+                    x-text="!p.configured ? 'unconfigured' : p.rate_limited ? 'rate limited' : 'available'">
+                  </span>
+                </td>
+                <td class="text-mono" x-text="p.requests_today"></td>
+                <td class="text-mono td-accent" x-text="'$' + (p.cost_today_usd||0).toFixed(6)"></td>
+                <td class="text-mono td-muted"
+                  x-text="p.rate_limited ? 'resets in ' + p.rate_limit_reset_secs + 's' : '—'">
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── Costs ─────────────────────────────────────────────────────── -->
+    <div x-show="page==='costs'">
+      <div class="page-header">
+        <div class="page-title"><span>//</span> Cost Analytics</div>
+        <div class="flex-gap">
+          <select x-model="costDays" @change="loadCosts()" style="width:140px">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+          <button class="btn btn-sm" @click="loadCosts()">↻</button>
+        </div>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="grid-4" x-show="costs">
+        <div class="card">
+          <div class="card-label">Total Cost</div>
+          <div class="card-value card-accent" x-text="costs ? '$' + costs.total_cost_usd.toFixed(4) : '—'"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Total Requests</div>
+          <div class="card-value" x-text="costs ? costs.total_requests.toLocaleString() : '—'"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Total Tokens</div>
+          <div class="card-value" x-text="costs ? formatTokens(costs.total_tokens) : '—'"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Avg Cost/Request</div>
+          <div class="card-value" x-text="costs && costs.total_requests > 0 ? '$' + (costs.total_cost_usd / costs.total_requests).toFixed(6) : '—'"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Daily chart -->
+        <div class="card">
+          <div class="chart-title">Daily Cost</div>
+          <div class="chart-wrap"><canvas id="dailyCostChart"></canvas></div>
+        </div>
+
+        <!-- By provider -->
+        <div class="card">
+          <div class="chart-title">By Provider</div>
+          <div class="chart-wrap"><canvas id="providerBreakdown"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Model breakdown table -->
+      <div class="card" x-show="costs && costs.by_model.length">
+        <div class="chart-title" style="margin-bottom:16px">By Model</div>
+        <table>
+          <thead>
+            <tr><th>Model</th><th>Provider</th><th>Requests</th><th>Avg Input</th><th>Avg Output</th><th>Total Cost</th></tr>
+          </thead>
+          <tbody>
+            <template x-for="m in (costs ? costs.by_model : [])" :key="m.model">
+              <tr>
+                <td class="td-accent text-mono" x-text="m.model"></td>
+                <td class="td-muted text-mono" x-text="m.provider"></td>
+                <td class="text-mono" x-text="m.requests.toLocaleString()"></td>
+                <td class="td-muted text-mono" x-text="m.avg_input_tokens"></td>
+                <td class="td-muted text-mono" x-text="m.avg_output_tokens"></td>
+                <td class="td-accent text-mono" x-text="'$' + m.cost_usd.toFixed(6)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── API Keys ───────────────────────────────────────────────────── -->
+    <div x-show="page==='keys'">
+      <div class="page-header">
+        <div class="page-title"><span>//</span> API Keys</div>
+        <button class="btn btn-primary" @click="showCreateKey=true">+ New Key</button>
+      </div>
+
+      <div class="card mb-0">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>ID</th><th>Tiers</th>
+              <th>Daily Limit</th><th>Spent Today</th><th>Spent Total</th>
+              <th>Status</th><th>Last Used</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="k in keys" :key="k.id">
+              <tr>
+                <td class="td-accent text-mono" x-text="k.name"></td>
+                <td class="td-muted text-mono" style="font-size:10px" x-text="k.id.substring(0,8)+'...'"></td>
+                <td class="text-mono" x-text="k.allowed_tiers ? k.allowed_tiers.join(', ') : 'all'"></td>
+                <td class="text-mono"
+                  x-text="k.budget_daily_usd != null ? '$' + k.budget_daily_usd.toFixed(2) : '∞'">
+                </td>
+                <td class="text-mono"
+                  :class="k.budget_daily_usd && k.spent_today_usd > k.budget_daily_usd * 0.8 ? 'td-warn' : 'td-accent'"
+                  x-text="'$' + k.spent_today_usd.toFixed(6)">
+                </td>
+                <td class="text-mono td-muted" x-text="'$' + k.spent_total_usd.toFixed(4)"></td>
+                <td>
+                  <span class="badge" :class="k.is_active ? 'badge-ok' : 'badge-off'"
+                    x-text="k.is_active ? 'active' : 'revoked'">
+                  </span>
+                </td>
+                <td class="td-muted text-mono" style="font-size:10px"
+                  x-text="k.last_used_at ? k.last_used_at.substring(0,10) : 'never'">
+                </td>
+                <td>
+                  <div class="flex-gap">
+                    <button class="btn btn-sm btn-danger" x-show="k.is_active"
+                      @click="revokeKey(k.id, k.name)">Revoke</button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="keys.length===0">
+              <td colspan="9" style="text-align:center;color:var(--muted);padding:24px">
+                No API keys yet. Create one to start routing requests.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Create Key Modal ───────────────────────────────────────────────── -->
+<div class="modal-bg" x-show="showCreateKey" @click.self="showCreateKey=false; newKeyResult=null">
+  <div class="modal">
+    <div class="modal-title">// CREATE API KEY</div>
+
+    <!-- Result state -->
+    <template x-if="newKeyResult">
+      <div>
+        <div style="font-size:12px;color:var(--text);margin-bottom:8px">Key created. Copy it now — it will not be shown again.</div>
+        <div class="key-reveal" x-text="newKeyResult.key"></div>
+        <div class="key-warn">⚠ Store this key securely. It cannot be recovered.</div>
+        <div style="margin-top:20px;display:flex;gap:8px">
+          <button class="btn btn-primary" @click="copyKey(newKeyResult.key)">Copy Key</button>
+          <button class="btn" @click="showCreateKey=false; newKeyResult=null; loadKeys()">Done</button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Create form -->
+    <template x-if="!newKeyResult">
+      <div>
+        <div class="form-row">
+          <label class="form-label">Key Name *</label>
+          <input type="text" placeholder="e.g. production-backend" x-model="newKey.name">
+        </div>
+        <div class="grid-2" style="gap:12px;margin-bottom:14px">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">Daily Budget (USD)</label>
+            <input type="number" placeholder="Unlimited" x-model="newKey.budget_daily_usd" step="0.01">
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">Monthly Budget (USD)</label>
+            <input type="number" placeholder="Unlimited" x-model="newKey.budget_monthly_usd" step="0.01">
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Max Tokens / Request</label>
+          <input type="number" placeholder="No limit" x-model="newKey.max_tokens_per_request">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Allowed Tiers</label>
+          <select x-model="newKey.tier_mode">
+            <option value="all">All tiers (economy + standard + premium)</option>
+            <option value="economy">Economy only</option>
+            <option value="economy_standard">Economy + Standard</option>
+          </select>
+        </div>
+        <div style="color:var(--error);font-size:11px;margin-bottom:12px" x-show="createError" x-text="createError"></div>
+        <div style="display:flex;gap:8px;margin-top:20px">
+          <button class="btn btn-primary" @click="createKey()">Create Key</button>
+          <button class="btn" @click="showCreateKey=false">Cancel</button>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<script>
+Chart.defaults.color = '#4a6080';
+Chart.defaults.borderColor = '#1a2d42';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 11;
+
+function app() {
+  return {
+    // Auth
+    token: localStorage.getItem('ng_token') || '',
+    loginToken: '',
+    loginError: '',
+
+    // Navigation
+    page: 'overview',
+
+    // Data
+    health: { providers: [], uptime_secs: 0, version: '' },
+    costs: null,
+    keys: [],
+    costDays: 30,
+
+    // Derived stats
+    todayCost: 0,
+    todayRequests: 0,
+    monthCost: 0,
+    monthRequests: 0,
+    keyCount: 0,
+
+    // UI state
+    lastRefresh: 'never',
+    showCreateKey: false,
+    newKeyResult: null,
+    newKey: { name: '', budget_daily_usd: '', budget_monthly_usd: '', max_tokens_per_request: '', tier_mode: 'all' },
+    createError: '',
+
+    // Chart instances
+    charts: {},
+
+    async init() {
+      if (this.token) {
+        await this.loadAll();
+        setInterval(() => this.loadHealth(), 10000);
+      }
+    },
+
+    async doLogin() {
+      this.loginError = '';
+      this.token = this.loginToken.trim();
+      localStorage.setItem('ng_token', this.token);
+      try {
+        await this.loadAll();
+      } catch(e) {
+        this.loginError = 'Invalid token or cannot connect';
+        this.token = '';
+        localStorage.removeItem('ng_token');
+      }
+    },
+
+    async loadAll() {
+      await Promise.all([this.loadHealth(), this.loadCosts(), this.loadKeys()]);
+    },
+
+    async loadHealth() {
+      const data = await this.api('/health', 'GET', null, false);
+      if (data) {
+        this.health = data;
+        this.lastRefresh = new Date().toLocaleTimeString();
+      }
+    },
+
+    async loadCosts() {
+      const data = await this.api(`/admin/costs?days=${this.costDays}`);
+      if (data) {
+        this.costs = data;
+
+        // Today stats from health (providers)
+        if (this.health.providers) {
+          this.todayCost = this.health.providers.reduce((s, p) => s + (p.cost_today_usd || 0), 0);
+          this.todayRequests = this.health.providers.reduce((s, p) => s + (p.requests_today || 0), 0);
+        }
+
+        // Month from last 30 days data
+        this.monthCost = data.total_cost_usd;
+        this.monthRequests = data.total_requests;
+
+        this.$nextTick(() => {
+          this.renderDailyChart();
+          this.renderProviderChart();
+          this.renderCostChart();
+          this.renderProviderBreakdown();
+        });
+      }
+    },
+
+    async loadKeys() {
+      const data = await this.api('/admin/keys');
+      if (data) {
+        this.keys = data;
+        this.keyCount = data.filter(k => k.is_active).length;
+      }
+    },
+
+    async createKey() {
+      this.createError = '';
+      if (!this.newKey.name.trim()) { this.createError = 'Name is required'; return; }
+
+      const tierMap = {
+        all: null,
+        economy: ['economy'],
+        economy_standard: ['economy', 'standard'],
+      };
+
+      const payload = {
+        name: this.newKey.name.trim(),
+        budget_daily_usd: this.newKey.budget_daily_usd ? parseFloat(this.newKey.budget_daily_usd) : null,
+        budget_monthly_usd: this.newKey.budget_monthly_usd ? parseFloat(this.newKey.budget_monthly_usd) : null,
+        max_tokens_per_request: this.newKey.max_tokens_per_request ? parseInt(this.newKey.max_tokens_per_request) : null,
+        allowed_tiers: tierMap[this.newKey.tier_mode],
+      };
+
+      const result = await this.api('/admin/keys', 'POST', payload);
+      if (result) {
+        this.newKeyResult = result;
+        this.newKey = { name: '', budget_daily_usd: '', budget_monthly_usd: '', max_tokens_per_request: '', tier_mode: 'all' };
+      }
+    },
+
+    async revokeKey(id, name) {
+      if (!confirm(`Revoke key "${name}"? This cannot be undone.`)) return;
+      const result = await this.api(`/admin/keys/${id}/revoke`, 'POST', {});
+      if (result) await this.loadKeys();
+    },
+
+    copyKey(key) {
+      navigator.clipboard.writeText(key).then(() => alert('Copied to clipboard'));
+    },
+
+    // ── Charts ────────────────────────────────────────────────────────────
+    renderCostChart() {
+      const ctx = document.getElementById('costChart');
+      if (!ctx || !this.costs) return;
+      const days = this.costs.by_day.slice(-14);
+
+      if (this.charts.cost) this.charts.cost.destroy();
+      this.charts.cost = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: days.map(d => d.date.substring(5)),
+          datasets: [{
+            data: days.map(d => d.cost_usd),
+            borderColor: '#00d4aa',
+            backgroundColor: 'rgba(0,212,170,0.08)',
+            borderWidth: 1.5,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointBackgroundColor: '#00d4aa',
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#1a2d42' } },
+            y: { grid: { color: '#1a2d42' }, ticks: { callback: v => '$' + v.toFixed(4) } }
+          }
+        }
+      });
+    },
+
+    renderProviderChart() {
+      const ctx = document.getElementById('providerChart');
+      if (!ctx || !this.costs) return;
+
+      if (this.charts.provider) this.charts.provider.destroy();
+      const providers = this.costs.by_provider;
+      this.charts.provider = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: providers.map(p => p.provider),
+          datasets: [{
+            data: providers.map(p => p.requests),
+            backgroundColor: ['rgba(0,212,170,0.7)', 'rgba(0,102,255,0.7)', 'rgba(255,170,0,0.7)'],
+            borderColor: '#080c10',
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { padding: 16, pointStyle: 'rect', usePointStyle: true }
+            }
+          }
+        }
+      });
+    },
+
+    renderDailyChart() {
+      const ctx = document.getElementById('dailyCostChart');
+      if (!ctx || !this.costs) return;
+
+      if (this.charts.daily) this.charts.daily.destroy();
+      const days = this.costs.by_day;
+      this.charts.daily = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: days.map(d => d.date.substring(5)),
+          datasets: [{
+            data: days.map(d => d.cost_usd),
+            backgroundColor: 'rgba(0,212,170,0.3)',
+            borderColor: '#00d4aa',
+            borderWidth: 1,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#1a2d42' } },
+            y: { grid: { color: '#1a2d42' }, ticks: { callback: v => '$' + v.toFixed(4) } }
+          }
+        }
+      });
+    },
+
+    renderProviderBreakdown() {
+      const ctx = document.getElementById('providerBreakdown');
+      if (!ctx || !this.costs) return;
+
+      if (this.charts.breakdown) this.charts.breakdown.destroy();
+      const providers = this.costs.by_provider;
+      this.charts.breakdown = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: providers.map(p => p.provider),
+          datasets: [{
+            label: 'Cost USD',
+            data: providers.map(p => p.cost_usd),
+            backgroundColor: ['rgba(0,212,170,0.5)', 'rgba(0,102,255,0.5)', 'rgba(255,170,0,0.5)'],
+            borderColor: ['#00d4aa', '#0066ff', '#ffaa00'],
+            borderWidth: 1,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#1a2d42' } },
+            y: { grid: { color: '#1a2d42' }, ticks: { callback: v => '$' + v.toFixed(4) } }
+          }
+        }
+      });
+    },
+
+    // ── API helper ────────────────────────────────────────────────────────
+    async api(path, method = 'GET', body = null, authRequired = true) {
+      const opts = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authRequired ? { 'Authorization': 'Bearer ' + this.token } : {})
+        },
+      };
+      if (body) opts.body = JSON.stringify(body);
+
+      try {
+        const res = await fetch(path, opts);
+        if (res.status === 401) {
+          this.token = '';
+          localStorage.removeItem('ng_token');
+          return null;
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+          this.createError = err?.error?.message || 'Request failed';
+          return null;
+        }
+        return await res.json();
+      } catch(e) {
+        console.error(path, e);
+        return null;
+      }
+    },
+
+    // ── Formatters ────────────────────────────────────────────────────────
+    formatUptime(secs) {
+      if (!secs) return '0s';
+      const d = Math.floor(secs / 86400);
+      const h = Math.floor((secs % 86400) / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      if (d > 0) return `${d}d ${h}h`;
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m`;
+    },
+
+    formatTokens(n) {
+      if (!n) return '0';
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+      return n.toString();
+    },
+  };
+}
+</script>
+</body>
+</html>

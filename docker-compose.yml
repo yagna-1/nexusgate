@@ -1,0 +1,60 @@
+version: '3.9'
+
+services:
+  # ── NexusGate ───────────────────────────────────────────────────────────────
+  nexusgate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      DATABASE_URL: sqlite:/app/data/nexusgate.db
+      REDIS_URL: redis://redis:6379
+      # ⚠ REQUIRED: change this in production
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-change-this-to-a-long-random-secret-min-32-chars}
+      # LLM Provider keys (set the ones you have)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Behaviour
+      DEFAULT_MAX_TOKENS: ${DEFAULT_MAX_TOKENS:-4096}
+      REQUEST_TIMEOUT_SECS: ${REQUEST_TIMEOUT_SECS:-60}
+      MAX_FALLBACK_ATTEMPTS: ${MAX_FALLBACK_ATTEMPTS:-3}
+      RUST_LOG: nexusgate=info,tower_http=warn
+    volumes:
+      - nexusgate_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    command: >
+      redis-server
+        --save 60 1
+        --loglevel warning
+        --maxmemory 128mb
+        --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  nexusgate_data:
+  redis_data:
