@@ -353,8 +353,3 @@ Good first issues:
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE) for details.
-
----
-
-> **Suggested GitHub topics** (add via repo Settings → Topics):
-> `llm` `openai` `anthropic` `gemini` `llm-gateway` `proxy` `rust` `cost-management` `rate-limiting` `fallback` `openai-compatible` `self-hosted`
