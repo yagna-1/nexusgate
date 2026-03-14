@@ -51,6 +51,8 @@ pub struct NexusGateOptions {
     pub fallback: Option<bool>,
     /// Override per-request budget in USD (e.g. 0.05 = 5 cents max)
     pub max_cost_usd: Option<f64>,
+    /// Optional workflow identity for workflow-scoped budget tracking
+    pub workflow_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -334,6 +336,8 @@ pub struct CreateApiKeyRequest {
     pub budget_total_usd: Option<f64>,
     pub budget_daily_usd: Option<f64>,
     pub budget_monthly_usd: Option<f64>,
+    pub budget_workflow_daily_usd: Option<f64>,
+    pub budget_workflow_monthly_usd: Option<f64>,
     pub max_tokens_per_request: Option<i64>,
     pub allowed_tiers: Option<Vec<String>>,
 }
@@ -355,6 +359,8 @@ pub struct ApiKeyInfo {
     pub budget_total_usd: Option<f64>,
     pub budget_daily_usd: Option<f64>,
     pub budget_monthly_usd: Option<f64>,
+    pub budget_workflow_daily_usd: Option<f64>,
+    pub budget_workflow_monthly_usd: Option<f64>,
     pub max_tokens_per_request: Option<i64>,
     pub allowed_tiers: Option<Vec<String>>,
     pub created_at: String,
@@ -427,6 +433,8 @@ pub struct AuthContext {
     pub budget_total_micro_usd: Option<i64>,
     pub budget_daily_micro_usd: Option<i64>,
     pub budget_monthly_micro_usd: Option<i64>,
+    pub budget_workflow_daily_micro_usd: Option<i64>,
+    pub budget_workflow_monthly_micro_usd: Option<i64>,
     pub max_tokens_per_request: Option<i64>,
     pub allowed_tiers: Option<Vec<String>>,
 }

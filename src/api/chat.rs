@@ -7,12 +7,11 @@ use crate::{
     budget::BudgetEnforcer,
     error::{AppError, Result},
     models::{
-        AuthContext, ChatCompletionRequest, ChatCompletionResponse, ChatMessage,
-        Choice, ModelInfo, NexusGateMeta, ProviderRequest, ProviderType, Usage,
+        AuthContext, ChatCompletionRequest, ChatCompletionResponse, ChatMessage, Choice, ModelInfo,
+        NexusGateMeta, ProviderRequest, ProviderType, Usage,
     },
     providers::{
-        anthropic::AnthropicProvider, gemini::GeminiProvider, openai::OpenAIProvider,
-        LlmProvider,
+        anthropic::AnthropicProvider, gemini::GeminiProvider, openai::OpenAIProvider, LlmProvider,
     },
     rate_limit::RateLimiter,
     router::ModelRouter,
@@ -26,6 +25,9 @@ pub async fn chat_completions(
 ) -> Result<Json<ChatCompletionResponse>> {
     let request_id = Uuid::new_v4().to_string();
     let ng_opts = req.nexusgate.as_ref();
+    let workflow_id = ng_opts
+        .and_then(|o| o.workflow_id.clone())
+        .filter(|s| !s.trim().is_empty());
 
     // ── Token limits ──────────────────────────────────────────────────────────
     let max_tokens = req
@@ -49,6 +51,16 @@ pub async fn chat_completions(
     let estimated_cost = (max_tokens as i64) * 75;
 
     budget.check(&auth, estimated_cost).await?;
+    if let Some(ref wf_id) = workflow_id {
+        budget
+            .check_workflow(
+                wf_id,
+                auth.budget_workflow_daily_micro_usd,
+                auth.budget_workflow_monthly_micro_usd,
+                estimated_cost,
+            )
+            .await?;
+    }
 
     // ── Model routing ─────────────────────────────────────────────────────────
     let router = ModelRouter::new();
@@ -58,16 +70,9 @@ pub async fn chat_completions(
     let allow_fallback = ng_opts.and_then(|o| o.fallback).unwrap_or(true);
 
     let initial_model = router
-        .resolve_initial_model(
-            req.model.as_deref(),
-            preferred_tier,
-            &auth,
-            &state.config,
-        )
+        .resolve_initial_model(req.model.as_deref(), preferred_tier, &auth, &state.config)
         .ok_or_else(|| {
-            AppError::NoProviders(
-                "No models available for your tier/provider configuration".into(),
-            )
+            AppError::NoProviders("No models available for your tier/provider configuration".into())
         })?;
 
     router.log_selection(&initial_model, "initial selection");
@@ -78,9 +83,13 @@ pub async fn chat_completions(
 
     if allow_fallback {
         // FIX: collect rate-limited providers with proper async awaits
-        
+
         let mut rate_limited: Vec<ProviderType> = Vec::new();
-        for p in [ProviderType::OpenAI, ProviderType::Anthropic, ProviderType::Gemini] {
+        for p in [
+            ProviderType::OpenAI,
+            ProviderType::Anthropic,
+            ProviderType::Gemini,
+        ] {
             if rate_limiter.is_rate_limited(&p).await {
                 rate_limited.push(p);
             }
@@ -146,11 +155,21 @@ pub async fn chat_completions(
                 let output_tok = resp.output_tokens;
                 let req_id = request_id.clone();
                 let fb = fallback_count > 0;
+                let wf = workflow_id.clone();
 
                 tokio::spawn(async move {
                     let _ = budget_clone
-                        .record_cost(&key_id, &provider_name, &model_id,
-                                     input_tok, output_tok, cost_micro_usd, &req_id, fb)
+                        .record_cost_for(
+                            &key_id,
+                            wf.as_deref(),
+                            &provider_name,
+                            &model_id,
+                            input_tok,
+                            output_tok,
+                            cost_micro_usd,
+                            &req_id,
+                            fb,
+                        )
                         .await;
                 });
 
@@ -171,8 +190,15 @@ pub async fn chat_completions(
                 );
 
                 return Ok(Json(build_response(
-                    request_id, model, &resp.model_used, &resp.content, &resp.finish_reason,
-                    resp.input_tokens, resp.output_tokens, cost_micro_usd, fallback_count,
+                    request_id,
+                    model,
+                    &resp.model_used,
+                    &resp.content,
+                    &resp.finish_reason,
+                    resp.input_tokens,
+                    resp.output_tokens,
+                    cost_micro_usd,
+                    fallback_count,
                 )));
             }
 
@@ -184,7 +210,9 @@ pub async fn chat_completions(
                             .trim_start_matches("RATE_LIMITED:")
                             .parse()
                             .unwrap_or(60);
-                        let _ = rate_limiter.mark_rate_limited(&model.provider, Some(secs)).await;
+                        let _ = rate_limiter
+                            .mark_rate_limited(&model.provider, Some(secs))
+                            .await;
                     }
                 }
                 last_error = Some(e);
@@ -201,17 +229,25 @@ fn build_provider(model: &ModelInfo, state: &AppState) -> Result<Box<dyn LlmProv
     let timeout = state.config.request_timeout_secs;
     match model.provider {
         ProviderType::OpenAI => {
-            let key = state.config.openai_api_key.clone()
+            let key = state
+                .config
+                .openai_api_key
+                .clone()
                 .ok_or_else(|| AppError::NoProviders("OpenAI API key not configured".into()))?;
             Ok(Box::new(OpenAIProvider::new(key, timeout)))
         }
         ProviderType::Anthropic => {
-            let key = state.config.anthropic_api_key.clone()
-                .ok_or_else(|| AppError::NoProviders("Anthropic API key not configured".into()))?;
+            let key =
+                state.config.anthropic_api_key.clone().ok_or_else(|| {
+                    AppError::NoProviders("Anthropic API key not configured".into())
+                })?;
             Ok(Box::new(AnthropicProvider::new(key, timeout)))
         }
         ProviderType::Gemini => {
-            let key = state.config.gemini_api_key.clone()
+            let key = state
+                .config
+                .gemini_api_key
+                .clone()
                 .ok_or_else(|| AppError::NoProviders("Gemini API key not configured".into()))?;
             Ok(Box::new(GeminiProvider::new(key, timeout)))
         }

@@ -1,13 +1,16 @@
 pub mod admin;
 pub mod chat;
 pub mod health;
+pub mod mcp;
 
 use axum::{
+    extract::State,
     http::HeaderValue,
     middleware,
     routing::{delete, get, post},
-    Router,
+    Json, Router,
 };
+use serde_json::json;
 use std::sync::Arc;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -45,6 +48,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     // OpenAI-compatible completions (requires a valid NexusGate API key)
     let api_routes = Router::new()
         .route("/v1/chat/completions", post(chat::chat_completions))
+        .route("/mcp/tools/call", post(mcp::mcp_tools_call))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_api_key,
@@ -62,12 +66,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         ));
 
     // Token issuance (unprotected — takes admin secret in body)
-    let auth_routes = Router::new()
-        .route("/admin/token", post(admin::get_admin_token));
+    let auth_routes = Router::new().route("/admin/token", post(admin::get_admin_token));
 
     // Health (public)
     let health_routes = Router::new()
-        .route("/health", get(health::health));
+        .route("/health", get(health::health))
+        .route("/.well-known/agent.json", get(agent_card));
 
     // Dashboard (public)
     let dashboard_routes = Router::new().route(
@@ -89,4 +93,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+}
+
+async fn agent_card(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    Json(json!({
+        "name": "nexusgate",
+        "description": "NexusGate MCP/LLM routing gateway",
+        "url": state.config.public_base_url,
+        "capabilities": {
+            "mcp_proxy": true,
+            "chat_completions": true,
+            "workflow_budget_tracking": true
+        },
+        "endpoints": {
+            "chat_completions": "/v1/chat/completions",
+            "mcp_tools_call": "/mcp/tools/call",
+            "health": "/health"
+        }
+    }))
 }

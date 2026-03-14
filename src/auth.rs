@@ -25,7 +25,8 @@ pub async fn require_api_key(
     let row = sqlx::query(
         r#"
         SELECT id, name, budget_total_micro_usd, budget_daily_micro_usd,
-               budget_monthly_micro_usd, max_tokens_per_request,
+               budget_monthly_micro_usd, budget_workflow_daily_micro_usd,
+               budget_workflow_monthly_micro_usd, max_tokens_per_request,
                allowed_tiers, is_active
         FROM api_keys
         WHERE key_hash = ?
@@ -54,6 +55,14 @@ pub async fn require_api_key(
         budget_total_micro_usd: row.try_get("budget_total_micro_usd").ok().flatten(),
         budget_daily_micro_usd: row.try_get("budget_daily_micro_usd").ok().flatten(),
         budget_monthly_micro_usd: row.try_get("budget_monthly_micro_usd").ok().flatten(),
+        budget_workflow_daily_micro_usd: row
+            .try_get("budget_workflow_daily_micro_usd")
+            .ok()
+            .flatten(),
+        budget_workflow_monthly_micro_usd: row
+            .try_get("budget_workflow_monthly_micro_usd")
+            .ok()
+            .flatten(),
         max_tokens_per_request: row.try_get("max_tokens_per_request").ok().flatten(),
         allowed_tiers,
     };
@@ -63,7 +72,7 @@ pub async fn require_api_key(
     let key_id = ctx.key_id.clone();
     tokio::spawn(async move {
         let _ = sqlx::query(
-            "UPDATE api_keys SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+            "UPDATE api_keys SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
         )
         .bind(&key_id)
         .execute(&db)
