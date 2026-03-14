@@ -12,11 +12,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        config: Config,
-        db: sqlx::SqlitePool,
-        redis: redis::aio::ConnectionManager,
-    ) -> Self {
+    pub fn new(config: Config, db: sqlx::SqlitePool, redis: redis::aio::ConnectionManager) -> Self {
         AppState {
             config,
             db,

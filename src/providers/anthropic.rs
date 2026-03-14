@@ -36,13 +36,15 @@ impl AnthropicProvider {
             .collect::<Vec<_>>()
             .join("\n");
 
-        let non_system: Vec<&ChatMessage> = messages
-            .iter()
-            .filter(|m| m.role != "system")
-            .collect();
+        let non_system: Vec<&ChatMessage> =
+            messages.iter().filter(|m| m.role != "system").collect();
 
         (
-            if system.is_empty() { None } else { Some(system) },
+            if system.is_empty() {
+                None
+            } else {
+                Some(system)
+            },
             non_system,
         )
     }
@@ -164,13 +166,14 @@ impl LlmProvider for AnthropicProvider {
             });
         }
 
-        let ant_resp = http_resp
-            .json::<AnthropicResponse>()
-            .await
-            .map_err(|e| AppError::ProviderError {
-                provider: "anthropic".into(),
-                message: format!("Parse error: {e}"),
-            })?;
+        let ant_resp =
+            http_resp
+                .json::<AnthropicResponse>()
+                .await
+                .map_err(|e| AppError::ProviderError {
+                    provider: "anthropic".into(),
+                    message: format!("Parse error: {e}"),
+                })?;
 
         let content = ant_resp
             .content

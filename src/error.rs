@@ -45,36 +45,22 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, code, message) = match &self {
-            AppError::Unauthorized(msg) => (
-                StatusCode::UNAUTHORIZED,
-                "invalid_api_key",
-                msg.clone(),
-            ),
-            AppError::BudgetExceeded(msg) => (
-                StatusCode::PAYMENT_REQUIRED,
-                "budget_exceeded",
-                msg.clone(),
-            ),
+            AppError::Unauthorized(msg) => {
+                (StatusCode::UNAUTHORIZED, "invalid_api_key", msg.clone())
+            }
+            AppError::BudgetExceeded(msg) => {
+                (StatusCode::PAYMENT_REQUIRED, "budget_exceeded", msg.clone())
+            }
             AppError::NoProviders(msg) => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "no_providers_available",
                 msg.clone(),
             ),
-            AppError::ProviderError { message, .. } => (
-                StatusCode::BAD_GATEWAY,
-                "provider_error",
-                message.clone(),
-            ),
-            AppError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
-                "invalid_request",
-                msg.clone(),
-            ),
-            AppError::NotFound(msg) => (
-                StatusCode::NOT_FOUND,
-                "not_found",
-                msg.clone(),
-            ),
+            AppError::ProviderError { message, .. } => {
+                (StatusCode::BAD_GATEWAY, "provider_error", message.clone())
+            }
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "invalid_request", msg.clone()),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, "not_found", msg.clone()),
             AppError::AllProvidersRateLimited => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",

@@ -11,21 +11,20 @@ use crate::{
     budget::BudgetEnforcer,
     error::{AppError, Result},
     models::{
-        ApiKeyInfo, CostSummary, CreateApiKeyRequest, CreateApiKeyResponse,
-        DailyCost, ModelCostBreakdown, ProviderCostBreakdown,
+        ApiKeyInfo, CostSummary, CreateApiKeyRequest, CreateApiKeyResponse, DailyCost,
+        ModelCostBreakdown, ProviderCostBreakdown,
     },
     state::AppState,
 };
 
 // ── API Keys ─────────────────────────────────────────────────────────────────
 
-pub async fn list_keys(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Vec<ApiKeyInfo>>> {
+pub async fn list_keys(State(state): State<Arc<AppState>>) -> Result<Json<Vec<ApiKeyInfo>>> {
     let rows = sqlx::query(
         r#"
         SELECT id, name, is_active, budget_total_micro_usd, budget_daily_micro_usd,
-               budget_monthly_micro_usd, max_tokens_per_request, allowed_tiers,
+               budget_monthly_micro_usd, budget_workflow_daily_micro_usd,
+               budget_workflow_monthly_micro_usd, max_tokens_per_request, allowed_tiers,
                created_at, last_used_at
         FROM api_keys
         ORDER BY created_at DESC
@@ -39,8 +38,10 @@ pub async fn list_keys(
 
     for row in rows {
         let key_id: String = row.get("id");
-        let (spent_today, spent_month, spent_total) =
-            budget.get_spend_summary(&key_id).await.unwrap_or((0.0, 0.0, 0.0));
+        let (spent_today, spent_month, spent_total) = budget
+            .get_spend_summary(&key_id)
+            .await
+            .unwrap_or((0.0, 0.0, 0.0));
 
         let allowed_tiers: Option<Vec<String>> = row
             .try_get::<Option<String>, _>("allowed_tiers")
@@ -64,6 +65,16 @@ pub async fn list_keys(
                 .map(|v| v as f64 / 1_000_000.0),
             budget_monthly_usd: row
                 .try_get::<Option<i64>, _>("budget_monthly_micro_usd")
+                .ok()
+                .flatten()
+                .map(|v| v as f64 / 1_000_000.0),
+            budget_workflow_daily_usd: row
+                .try_get::<Option<i64>, _>("budget_workflow_daily_micro_usd")
+                .ok()
+                .flatten()
+                .map(|v| v as f64 / 1_000_000.0),
+            budget_workflow_monthly_usd: row
+                .try_get::<Option<i64>, _>("budget_workflow_monthly_micro_usd")
                 .ok()
                 .flatten()
                 .map(|v| v as f64 / 1_000_000.0),
@@ -95,6 +106,12 @@ pub async fn create_key(
     let budget_total = req.budget_total_usd.map(|v| (v * 1_000_000.0) as i64);
     let budget_daily = req.budget_daily_usd.map(|v| (v * 1_000_000.0) as i64);
     let budget_monthly = req.budget_monthly_usd.map(|v| (v * 1_000_000.0) as i64);
+    let workflow_budget_daily = req
+        .budget_workflow_daily_usd
+        .map(|v| (v * 1_000_000.0) as i64);
+    let workflow_budget_monthly = req
+        .budget_workflow_monthly_usd
+        .map(|v| (v * 1_000_000.0) as i64);
     let allowed_tiers_json = req
         .allowed_tiers
         .as_ref()
@@ -104,8 +121,9 @@ pub async fn create_key(
         r#"
         INSERT INTO api_keys
             (id, key_hash, name, budget_total_micro_usd, budget_daily_micro_usd,
-             budget_monthly_micro_usd, max_tokens_per_request, allowed_tiers)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             budget_monthly_micro_usd, budget_workflow_daily_micro_usd,
+             budget_workflow_monthly_micro_usd, max_tokens_per_request, allowed_tiers)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -114,6 +132,8 @@ pub async fn create_key(
     .bind(budget_total)
     .bind(budget_daily)
     .bind(budget_monthly)
+    .bind(workflow_budget_daily)
+    .bind(workflow_budget_monthly)
     .bind(req.max_tokens_per_request)
     .bind(allowed_tiers_json)
     .execute(&state.db)

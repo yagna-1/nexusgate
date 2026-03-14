@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS api_keys (
     budget_total_micro_usd    INTEGER,      -- lifetime total
     budget_daily_micro_usd    INTEGER,      -- per calendar day
     budget_monthly_micro_usd  INTEGER,      -- per calendar month
+    budget_workflow_daily_micro_usd   INTEGER, -- per workflow per day
+    budget_workflow_monthly_micro_usd INTEGER, -- per workflow per month
     max_tokens_per_request    INTEGER,
     allowed_tiers             TEXT,         -- JSON array: ["economy","standard"] or NULL = all
     is_active   INTEGER NOT NULL DEFAULT 1,
@@ -24,6 +26,7 @@ CREATE TABLE IF NOT EXISTS cost_records (
     input_tokens    INTEGER NOT NULL,
     output_tokens   INTEGER NOT NULL,
     cost_micro_usd  INTEGER NOT NULL,
+    workflow_id     TEXT,
     request_id      TEXT NOT NULL,
     fallback_used   INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),

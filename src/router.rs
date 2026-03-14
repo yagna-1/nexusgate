@@ -37,7 +37,10 @@ impl ModelRouter {
             if let Some(m) = self.find_model(model_name, &configured, ctx) {
                 return Some(m.clone());
             }
-            warn!(model = model_name, "Requested model not found, falling back to tier routing");
+            warn!(
+                model = model_name,
+                "Requested model not found, falling back to tier routing"
+            );
         }
 
         // Tier-based selection
@@ -136,9 +139,7 @@ impl ModelRouter {
             .catalog
             .iter()
             .filter(|m| {
-                m.tier == *tier
-                    && configured.contains(&m.provider)
-                    && self.tier_allowed(m, ctx)
+                m.tier == *tier && configured.contains(&m.provider) && self.tier_allowed(m, ctx)
             })
             .collect();
 

@@ -22,15 +22,21 @@ pub struct Config {
     pub default_max_tokens: u32,
     pub request_timeout_secs: u64,
     pub max_fallback_attempts: usize,
+    pub mcp_default_estimated_cost_micro_usd: i64,
 
     // CORS origins (comma-separated, * = all)
     pub cors_origins: String,
+
+    // MCP routing extension
+    pub mcp_upstream_url: Option<String>,
+    pub mcp_upstream_bearer_token: Option<String>,
+    pub public_base_url: String,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let admin_jwt_secret = std::env::var("ADMIN_JWT_SECRET")
-            .context("ADMIN_JWT_SECRET must be set")?;
+        let admin_jwt_secret =
+            std::env::var("ADMIN_JWT_SECRET").context("ADMIN_JWT_SECRET must be set")?;
 
         if admin_jwt_secret.len() < 32 {
             return Err(anyhow!("ADMIN_JWT_SECRET must be at least 32 characters"));
@@ -45,8 +51,7 @@ impl Config {
 
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite:/app/data/nexusgate.db".into()),
-            redis_url: std::env::var("REDIS_URL")
-                .unwrap_or_else(|_| "redis://redis:6379".into()),
+            redis_url: std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://redis:6379".into()),
 
             admin_jwt_secret,
 
@@ -66,8 +71,18 @@ impl Config {
                 .unwrap_or_else(|_| "3".into())
                 .parse()
                 .context("MAX_FALLBACK_ATTEMPTS must be a number")?,
+            mcp_default_estimated_cost_micro_usd: std::env::var(
+                "MCP_DEFAULT_ESTIMATED_COST_MICRO_USD",
+            )
+            .unwrap_or_else(|_| "2500".into())
+            .parse()
+            .context("MCP_DEFAULT_ESTIMATED_COST_MICRO_USD must be a number")?,
 
             cors_origins: std::env::var("CORS_ORIGINS").unwrap_or_else(|_| "*".into()),
+            mcp_upstream_url: std::env::var("MCP_UPSTREAM_URL").ok(),
+            mcp_upstream_bearer_token: std::env::var("MCP_UPSTREAM_BEARER_TOKEN").ok(),
+            public_base_url: std::env::var("PUBLIC_BASE_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".into()),
         })
     }
 
