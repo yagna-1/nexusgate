@@ -52,10 +52,7 @@ impl RateLimiter {
         let mut conn = self.redis.lock().await;
 
         // SETEX key ttl value
-        let _: () = conn
-            .set_ex(&key, 1i32, backoff_secs)
-            .await
-            .unwrap_or(());
+        let _: () = conn.set_ex(&key, 1i32, backoff_secs).await.unwrap_or(());
 
         warn!(
             provider = %provider,
@@ -106,7 +103,11 @@ impl RateLimiter {
 
     /// Get status for all providers
     pub async fn all_statuses(&self) -> Vec<(String, bool, Option<i64>)> {
-        let providers = [ProviderType::OpenAI, ProviderType::Anthropic, ProviderType::Gemini];
+        let providers = [
+            ProviderType::OpenAI,
+            ProviderType::Anthropic,
+            ProviderType::Gemini,
+        ];
         let mut statuses = vec![];
 
         for provider in &providers {

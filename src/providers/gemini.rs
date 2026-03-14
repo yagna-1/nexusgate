@@ -117,7 +117,11 @@ impl LlmProvider for GeminiProvider {
                 .filter(|m| m.role == "system")
                 .map(|m| m.text_content())
                 .collect();
-            if sys.is_empty() { None } else { Some(sys.join("\n")) }
+            if sys.is_empty() {
+                None
+            } else {
+                Some(sys.join("\n"))
+            }
         };
 
         let contents: Vec<GeminiContent> = req
@@ -188,22 +192,24 @@ impl LlmProvider for GeminiProvider {
             });
         }
 
-        let gem_resp = http_resp
-            .json::<GeminiResponse>()
-            .await
-            .map_err(|e| AppError::ProviderError {
-                provider: "gemini".into(),
-                message: format!("Parse error: {e}"),
-            })?;
+        let gem_resp =
+            http_resp
+                .json::<GeminiResponse>()
+                .await
+                .map_err(|e| AppError::ProviderError {
+                    provider: "gemini".into(),
+                    message: format!("Parse error: {e}"),
+                })?;
 
-        let candidate = gem_resp
-            .candidates
-            .into_iter()
-            .next()
-            .ok_or_else(|| AppError::ProviderError {
-                provider: "gemini".into(),
-                message: "Empty candidates in response".into(),
-            })?;
+        let candidate =
+            gem_resp
+                .candidates
+                .into_iter()
+                .next()
+                .ok_or_else(|| AppError::ProviderError {
+                    provider: "gemini".into(),
+                    message: "Empty candidates in response".into(),
+                })?;
 
         let content = candidate
             .content
@@ -226,9 +232,7 @@ impl LlmProvider for GeminiProvider {
             content,
             input_tokens: usage.prompt_token_count.unwrap_or(0),
             output_tokens: usage.candidates_token_count.unwrap_or(0),
-            finish_reason: candidate
-                .finish_reason
-                .unwrap_or_else(|| "STOP".into()),
+            finish_reason: candidate.finish_reason.unwrap_or_else(|| "STOP".into()),
         })
     }
 }

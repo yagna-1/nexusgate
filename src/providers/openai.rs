@@ -116,10 +116,7 @@ impl LlmProvider for OpenAIProvider {
             );
             return Err(AppError::ProviderError {
                 provider: "openai".into(),
-                message: format!(
-                    "RATE_LIMITED:{}",
-                    retry_after.unwrap_or(60)
-                ),
+                message: format!("RATE_LIMITED:{}", retry_after.unwrap_or(60)),
             });
         }
 
@@ -135,22 +132,24 @@ impl LlmProvider for OpenAIProvider {
             });
         }
 
-        let oai_resp = http_resp
-            .json::<OpenAIResponse>()
-            .await
-            .map_err(|e| AppError::ProviderError {
-                provider: "openai".into(),
-                message: format!("Failed to parse response: {e}"),
-            })?;
+        let oai_resp =
+            http_resp
+                .json::<OpenAIResponse>()
+                .await
+                .map_err(|e| AppError::ProviderError {
+                    provider: "openai".into(),
+                    message: format!("Failed to parse response: {e}"),
+                })?;
 
-        let choice = oai_resp
-            .choices
-            .into_iter()
-            .next()
-            .ok_or_else(|| AppError::ProviderError {
-                provider: "openai".into(),
-                message: "Empty choices in response".into(),
-            })?;
+        let choice =
+            oai_resp
+                .choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| AppError::ProviderError {
+                    provider: "openai".into(),
+                    message: "Empty choices in response".into(),
+                })?;
 
         Ok(ProviderResponse {
             provider: ProviderType::OpenAI,
