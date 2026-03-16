@@ -353,3 +353,16 @@ Good first issues:
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE) for details.
+
+## GitAgent Standard Overlay
+
+This repository now includes the AgentStack GitAgent overlay:
+
+- `agent.yaml` for identity, policy binding, and skill manifest
+- `SOUL.md` for operator-facing identity and mission
+- `RULES.md` for human-readable constraints mapped to runtime policy
+- `memory/` for auto-committed audit/test history
+- `skills/` for executable capability descriptors
+- `hooks/` for pre/post execution governance automation
+
+The overlay is additive: existing APIs and runtime behavior are unchanged unless these new files/hooks are explicitly used.

@@ -1,0 +1,30 @@
+name: nexusgate
+version: 1.0.0
+model: claude-sonnet-4-6
+
+identity:
+  policy_id: nexusgate-default
+  namespace: nexusgate
+  workflow_id_prefix: ng-
+
+tools:
+  - name: mcp-tools-call
+    endpoint: http://localhost:18088/mcp/tools/call
+  - name: chat-completions
+    endpoint: http://localhost:18088/v1/chat/completions
+
+skills:
+  - bootstrap
+  - serve
+  - test
+  - audit
+
+hooks:
+  pre-run: hooks/pre-run.sh
+  post-run: hooks/post-run.sh
+
+memory:
+  path: memory/
+  auto_commit: true
+  commit_message: "agent: auto-commit {skill} trace at {timestamp}"
+  human_review: pr

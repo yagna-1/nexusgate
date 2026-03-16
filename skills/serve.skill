@@ -1,0 +1,6 @@
+name: serve
+description: Start NexusGate MCP-native gateway
+command: cargo run --release --bin nexusgate
+env_required: [NEXUSGATE_API_KEYS]
+auto_commit_memory: true
+on_failure: hooks/on-failure.sh

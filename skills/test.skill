@@ -1,0 +1,4 @@
+name: test
+description: Run NexusGate test suite
+command: cargo test --all
+auto_commit_memory: true

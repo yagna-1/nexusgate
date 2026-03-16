@@ -1,0 +1,4 @@
+name: bootstrap
+description: Build and prepare NexusGate dependencies
+command: cargo build --release
+auto_commit_memory: false

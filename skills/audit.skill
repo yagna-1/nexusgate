@@ -1,0 +1,5 @@
+name: audit
+description: Export audit-oriented telemetry snapshots
+command: cargo test --all budget -- --nocapture
+auto_commit_memory: true
+produces: [memory/astragraph-audits/, memory/key-decisions.md]
